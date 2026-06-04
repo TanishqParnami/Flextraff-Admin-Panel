@@ -1,7 +1,7 @@
 // src/pages/controls.jsx
 import { useEffect, useState } from "react";
-import supabase from "../supabaseClient";
-import Sidebar from "../components/Sidebar";
+import supabase from "../../lib/supabaseClient";
+import Sidebar from "../../components/layout/Sidebar";
 
 const API_URL = import.meta.env.DEV
   ? ""

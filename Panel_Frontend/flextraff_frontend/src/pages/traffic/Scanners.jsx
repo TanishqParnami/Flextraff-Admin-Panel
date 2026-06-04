@@ -1,7 +1,7 @@
 // src/pages/Scanners.jsx
 import { useEffect, useState } from "react";
-import supabase from "../supabaseClient";
-import Sidebar from "../components/Sidebar";
+import supabase from "../../lib/supabaseClient";
+import Sidebar from "../../components/layout/Sidebar";
 
 export default function Scanners({ darkMode, toggleDarkMode }) {
   const [scanners, setScanners] = useState([]);

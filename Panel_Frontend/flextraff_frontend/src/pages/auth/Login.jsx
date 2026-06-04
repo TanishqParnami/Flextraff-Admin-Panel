@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import logo from "../assets/flextraff_logo.png";
+import logo from "../../assets/flextraff_logo.png";
 
 const API_URL = import.meta.env.DEV
   ? "http://localhost:8001"
@@ -14,58 +14,47 @@ export default function Login() {
 
   const navigate = useNavigate();
 
-  // =========================
-  // 🔐 NORMAL BACKEND LOGIN
-  // =========================
+  // ── Shared login logic ────────────────────────────────────────────────
+  const doLogin = async () => {
+    const res = await fetch(`${API_URL}/api/v1/users/login`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ username: user, password: pass }),
+    });
+
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.detail || "Invalid credentials");
+
+    // 2FA setup required
+    if (data.requires_2fa_setup) {
+      localStorage.setItem("temp_username", data.username);
+      localStorage.setItem("temp_token", data.temp_token);
+      navigate("/setup-2fa");
+      return;
+    }
+
+    // 2FA verify required
+    if (data.requires_2fa) {
+      localStorage.setItem("temp_username", data.username);
+      navigate("/verify-2fa");
+      return;
+    }
+
+    // ✅ Normal login — save real token
+    localStorage.setItem("access_token", data.access_token);
+    localStorage.setItem("refresh_token", data.refresh_token);
+    localStorage.setItem("user", JSON.stringify(data.user));
+    localStorage.setItem("auth", "true");
+    navigate("/dashboard");
+  };
+
+  // ── Normal login (form submit) ────────────────────────────────────────
   const handleLogin = async (e) => {
     e.preventDefault();
     setError("");
     setLoading(true);
-
     try {
-      const res = await fetch(`${API_URL}/api/v1/users/login`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          username: user,
-          password: pass,
-        }),
-      });
-
-      const data = await res.json();
-
-      if (!res.ok) {
-        throw new Error(data.detail || "Invalid credentials");
-      }
-
-      // 🔐 CHECK FOR 2FA
-      // =====================================
-      // FORCE 2FA SETUP
-      // =====================================
-      if (data.requires_2fa_setup) {
-        localStorage.setItem("temp_username", data.username);
-        localStorage.setItem("temp_token", data.temp_token);
-        navigate("/setup-2fa");
-        return;
-      }
-
-      // =====================================
-      // VERIFY EXISTING 2FA
-      // =====================================
-      if (data.requires_2fa) {
-        localStorage.setItem("temp_username", data.username);
-        navigate("/verify-2fa");
-        return;
-      }
-
-      // ✅ Normal login
-      localStorage.setItem("access_token", data.access_token);
-      localStorage.setItem("refresh_token", data.refresh_token);
-      localStorage.setItem("user", JSON.stringify(data.user));
-      localStorage.setItem("auth", "true");
-
-      navigate("/dashboard");
-
+      await doLogin();
     } catch (err) {
       console.error("Login error:", err);
       setError(err.message || "Login failed");
@@ -74,25 +63,19 @@ export default function Login() {
     }
   };
 
-  // =========================
-  // 🛡️ ADMIN QUICK LOGIN
-  // =========================
-  const handleAdminLogin = () => {
+  // ── Admin login — hits real backend, gets real token ──────────────────
+  // FIX: removed hardcoded credential bypass (was storing role: "ADMIN" which
+  // caused 403 on all admin API calls since backend checks for lowercase "admin")
+  const handleAdminLogin = async () => {
     setError("");
-
-    if (user === "admin" && pass === "admin123") {
-      localStorage.setItem("auth", "true");
-      localStorage.setItem(
-        "user",
-        JSON.stringify({
-          username: "admin",
-          role: "ADMIN",
-        })
-      );
-
-      navigate("/dashboard");
-    } else {
-      setError("Invalid admin credentials");
+    setLoading(true);
+    try {
+      await doLogin();
+    } catch (err) {
+      console.error("Admin login error:", err);
+      setError(err.message || "Admin login failed");
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -119,9 +102,7 @@ export default function Login() {
 
           {/* Username */}
           <div className="mb-5">
-            <label className="block text-sm text-gray-300 mb-2">
-              Username
-            </label>
+            <label className="block text-sm text-gray-300 mb-2">Username</label>
             <input
               type="text"
               placeholder="Enter username"
@@ -134,9 +115,7 @@ export default function Login() {
 
           {/* Password */}
           <div className="mb-3">
-            <label className="block text-sm text-gray-300 mb-2">
-              Password
-            </label>
+            <label className="block text-sm text-gray-300 mb-2">Password</label>
             <input
               type="password"
               placeholder="Enter password"
@@ -148,9 +127,7 @@ export default function Login() {
           </div>
 
           {/* Error */}
-          {error && (
-            <p className="text-red-400 text-sm mb-4">{error}</p>
-          )}
+          {error && <p className="text-red-400 text-sm mb-4">{error}</p>}
 
           {/* Normal Login */}
           <button
@@ -168,16 +145,16 @@ export default function Login() {
             <div className="flex-grow border-t border-gray-700" />
           </div>
 
-          {/* Admin Login */}
+          {/* Admin Login — hits real backend */}
           <button
             type="button"
             onClick={handleAdminLogin}
-            className="w-full bg-gray-700 hover:bg-gray-600 text-white font-semibold py-3 rounded-lg shadow-md transition duration-200"
+            disabled={loading}
+            className="w-full bg-gray-700 hover:bg-gray-600 text-white font-semibold py-3 rounded-lg shadow-md transition duration-200 disabled:opacity-60"
           >
-            Admin Login
+            {loading ? "Logging in..." : "Admin Login"}
           </button>
 
-          {/* Footer */}
           <p className="text-xs text-gray-500 text-center mt-6">
             🚦 Authorized access only
           </p>

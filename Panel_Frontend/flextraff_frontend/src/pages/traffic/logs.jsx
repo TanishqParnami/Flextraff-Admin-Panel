@@ -1,7 +1,7 @@
 // src/pages/Logs.jsx
 import { useEffect, useRef, useState } from "react";
-import supabase from "../supabaseClient";
-import Sidebar from "../components/Sidebar";
+import supabase from "../../lib/supabaseClient";
+import Sidebar from "../../components/layout/Sidebar";
 
 export default function Logs({ darkMode, toggleDarkMode }) {
   const [logs, setLogs] = useState([]);
