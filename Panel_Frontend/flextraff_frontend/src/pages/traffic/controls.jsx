@@ -1,7 +1,7 @@
 // src/pages/controls.jsx
 import { useEffect, useState } from "react";
-import supabase from "../../lib/supabaseClient";
 import Sidebar from "../../components/layout/Sidebar";
+import supabase from "../../lib/supabaseClient";
 
 const API_URL = import.meta.env.DEV
   ? ""
@@ -17,6 +17,7 @@ export default function Controls({ darkMode, toggleDarkMode }) {
   const [maxLaneTime, setMaxLaneTime] = useState(90);
 
   // Manual config
+  const [totalGreen, setTotalGreen] = useState(120);
   const [greenTimes, setGreenTimes] = useState({
     north: 30,
     south: 30,
@@ -24,15 +25,12 @@ export default function Controls({ darkMode, toggleDarkMode }) {
     west: 30,
   });
   const [yellowTime, setYellowTime] = useState(5);
-  const [totalGreen, setTotalGreen] = useState(120); // default 30x4
 
   const [error, setError] = useState("");
   const [success, setSuccess] = useState(null);
   const [serverErr, setServerErr] = useState(null);
   const [submitting, setSubmitting] = useState(false);
   const [loading, setLoading] = useState(false);
-
-  const lanes = ["north", "south", "east", "west"];
 
   // ── Style helpers ─────────────────────────────────────────────────────
   const labelText = darkMode ? "text-yellow-400" : "text-blue-700";
@@ -57,7 +55,7 @@ export default function Controls({ darkMode, toggleDarkMode }) {
     };
   };
 
-  // ── Fetch junctions from Supabase ─────────────────────────────────────
+  // ── Fetch junctions ───────────────────────────────────────────────────
   useEffect(() => {
     async function fetchJunctions() {
       const { data, error } = await supabase
@@ -73,7 +71,7 @@ export default function Controls({ darkMode, toggleDarkMode }) {
     fetchJunctions();
   }, []);
 
-  // ── Load existing config when junction changes ─────────────────────────
+  // ── Load config when junction changes ─────────────────────────────────
   useEffect(() => {
     if (selectedJunction) loadConfig(selectedJunction);
   }, [selectedJunction]);
@@ -82,6 +80,7 @@ export default function Controls({ darkMode, toggleDarkMode }) {
     setLoading(true);
     setSuccess(null);
     setServerErr(null);
+    setError("");
     try {
       const res = await fetch(`${API_URL}/api/v1/controls/${junctionId}`, {
         headers: getHeaders(),
@@ -98,21 +97,17 @@ export default function Controls({ darkMode, toggleDarkMode }) {
         const s = manual.lane_2_green_time ?? 30;
         const e = manual.lane_3_green_time ?? 30;
         const w = manual.lane_4_green_time ?? 30;
-
-        // ✅ Only trust DB values if they look reasonable
         const total = n + s + e + w;
         const safeTotal = total > 0 && total <= 600 ? total : 120;
         const safeN = n <= safeTotal ? n : 30;
         const safeS = s <= safeTotal ? s : 30;
         const safeE = e <= safeTotal ? e : 30;
         const safeW = safeTotal - safeN - safeS - safeE;
-
         setTotalGreen(safeTotal);
         setGreenTimes({ north: safeN, south: safeS, east: safeE, west: safeW });
         setYellowTime(manual.yellow_time ?? 5);
       } else {
         setMode("automatic");
-        // ✅ Reset manual to clean defaults when switching to auto
         setTotalGreen(120);
         setGreenTimes({ north: 30, south: 30, east: 30, west: 30 });
         if (auto) {
@@ -127,16 +122,13 @@ export default function Controls({ darkMode, toggleDarkMode }) {
     }
   };
 
-  // ── Manual green time logic ────────────────────────────────────────────
+  // ── Green time change handler ─────────────────────────────────────────
   const handleGreenTimeChange = (lane, value) => {
     if (lane === "west") return;
     const val = Math.max(0, Number(value));
     const updated = { ...greenTimes, [lane]: val };
-
-    // west = total - sum of other three
     const sumThree = updated.north + updated.south + updated.east;
     const west = totalGreen - sumThree;
-
     if (west < 0) {
       setError("Lane times exceed total. Reduce other lanes.");
       return;
@@ -153,7 +145,6 @@ export default function Controls({ darkMode, toggleDarkMode }) {
       setError("Select a junction first.");
       return;
     }
-
     setSubmitting(true);
     setSuccess(null);
     setServerErr(null);
@@ -161,7 +152,6 @@ export default function Controls({ darkMode, toggleDarkMode }) {
 
     try {
       if (mode === "manual") {
-        // Validate
         const total =
           greenTimes.north +
           greenTimes.south +
@@ -172,7 +162,6 @@ export default function Controls({ darkMode, toggleDarkMode }) {
           setSubmitting(false);
           return;
         }
-
         const res = await fetch(
           `${API_URL}/api/v1/controls/${selectedJunction}/manual`,
           {
@@ -191,10 +180,9 @@ export default function Controls({ darkMode, toggleDarkMode }) {
         if (!res.ok)
           throw new Error(data.detail || "Failed to save manual config");
         setSuccess(
-          `Manual override saved for junction — N:${greenTimes.north}s S:${greenTimes.south}s E:${greenTimes.east}s W:${greenTimes.west}s`,
+          `Manual override saved — N:${greenTimes.north}s  S:${greenTimes.south}s  E:${greenTimes.east}s  W:${greenTimes.west}s`,
         );
       } else {
-        // Auto mode
         if (minLaneTime >= maxLaneTime) {
           setError("Min lane time must be less than max lane time.");
           setSubmitting(false);
@@ -288,7 +276,6 @@ export default function Controls({ darkMode, toggleDarkMode }) {
                   setMode(e.target.value);
                   setError("");
                   setSuccess(null);
-
                   if (e.target.value === "manual") {
                     setTotalGreen(120);
                     setGreenTimes({ north: 30, south: 30, east: 30, west: 30 });
@@ -311,6 +298,7 @@ export default function Controls({ darkMode, toggleDarkMode }) {
                 >
                   Automatic Mode Settings
                 </h3>
+
                 <div>
                   <label className={`block mb-1 font-medium ${labelText}`}>
                     Min Lane Time (seconds)
@@ -327,6 +315,7 @@ export default function Controls({ darkMode, toggleDarkMode }) {
                     Minimum green time per lane the algorithm can assign.
                   </p>
                 </div>
+
                 <div>
                   <label className={`block mb-1 font-medium ${labelText}`}>
                     Max Lane Time (seconds)
@@ -357,7 +346,7 @@ export default function Controls({ darkMode, toggleDarkMode }) {
                   Manual Override Settings
                 </h3>
 
-                {/* ── Total Green Time ── */}
+                {/* Total Green Time */}
                 <div>
                   <label className={`block mb-1 font-medium ${labelText}`}>
                     Total Green Time (seconds)
@@ -368,7 +357,7 @@ export default function Controls({ darkMode, toggleDarkMode }) {
                     value={totalGreen}
                     onChange={(e) => {
                       const val = Number(e.target.value);
-                      setTotalGreen(val); // ← just set directly, no Math.max
+                      setTotalGreen(val);
                       const sumThree =
                         greenTimes.north + greenTimes.south + greenTimes.east;
                       const west = val - sumThree;
@@ -383,7 +372,6 @@ export default function Controls({ darkMode, toggleDarkMode }) {
                       );
                     }}
                     onBlur={(e) => {
-                      // ← validate only when user leaves the field
                       const val = Number(e.target.value);
                       if (val < 20) {
                         setTotalGreen(20);
@@ -405,7 +393,7 @@ export default function Controls({ darkMode, toggleDarkMode }) {
                   </p>
                 </div>
 
-                {/* ── Lane Green Times ── */}
+                {/* Lane Green Times */}
                 <div className="grid grid-cols-2 gap-5">
                   {["north", "south", "east"].map((lane) => (
                     <div key={lane}>
@@ -428,7 +416,7 @@ export default function Controls({ darkMode, toggleDarkMode }) {
                     </div>
                   ))}
 
-                  {/* ── West Lane (auto-filled) ── */}
+                  {/* West Lane — auto-filled */}
                   <div>
                     <label className="block mb-1 font-medium text-gray-400">
                       West Lane (Auto-Filled)
@@ -445,7 +433,7 @@ export default function Controls({ darkMode, toggleDarkMode }) {
                   </div>
                 </div>
 
-                {/* ── Yellow Time ── */}
+                {/* Yellow Time */}
                 <div>
                   <label className={`block mb-1 font-medium ${labelText}`}>
                     Yellow Time (seconds)
