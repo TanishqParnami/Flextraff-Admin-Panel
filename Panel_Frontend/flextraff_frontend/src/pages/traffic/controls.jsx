@@ -111,8 +111,8 @@ export default function Controls({ darkMode, toggleDarkMode }) {
         setTotalGreen(120);
         setGreenTimes({ north: 30, south: 30, east: 30, west: 30 });
         if (auto) {
-          setMinLaneTime(auto.min_lane_time ?? 15);
-          setMaxLaneTime(auto.max_lane_time ?? 90);
+          setMinLaneTime(auto.min_time ?? 15); 
+          setMaxLaneTime(auto.max_time ?? 90); 
         }
       }
     } catch (err) {
